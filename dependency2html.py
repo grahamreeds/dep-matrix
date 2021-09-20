@@ -31,102 +31,106 @@ import argparse
 #   HtmlTableInlineWriter and make it possible to subclass and customise it to print custom HTML
 #   tables.
 class HtmlTableWriter(object):
-    def __init__(self, writerObject, rowHeadings = [], columnHeadings = []):
+    def __init__(self, writerObject, rowHeadings=[], columnHeadings=[]):
         self.writer = writerObject
-        
+
         # Row and column specification
         self.rowIndex = 0
         self.columnIndex = 0
         self.rowHeadings = rowHeadings
         self.columnHeadings = columnHeadings
-        
+
         self.isFillerElement = False
-        
+
     # Writer state getters/setters
     def IsFillerElement(self):
         return self.isFillerElement
-    
+
     def SetFillerElement(self, isFillerElement):
         self.isFillerElement = isFillerElement
-    
+
     def GetRowIndex(self):
         return self.rowIndex
-    
+
     def SetRowIndex(self, rowNumber):
         self.rowIndex = rowNumber
-    
+
     def GetColumnIndex(self):
         return self.columnIndex
-    
+
     def SetColumnIndex(self, columnNumber):
         self.columnIndex = columnNumber
-    
+
     def GetColumnCount(self):
         return len(self.columnHeadings)
-    
+
     # Writer core
     def WriteTableStart(self):
-        self.writer.write('<table')
+        self.writer.write("<table")
         self._WriteAttributes(self.tableAttributes)
-        self.writer.write('>\n')
-    
+        self.writer.write(">\n")
+
     def WriteTableEnd(self):
-        self.writer.write('</table>\n')
+        self.writer.write("</table>\n")
 
     def WriteRowStart(self):
-        self.writer.write('<tr')
+        self.writer.write("<tr")
         self._WriteAttributes(self.rowAttributes)
-        self.writer.write('>')
-    
+        self.writer.write(">")
+
     def WriteRowEnd(self):
-        self.writer.write('</tr>\n')
-    
+        self.writer.write("</tr>\n")
+
     def WriteElementStart(self):
-        self.writer.write('<td')
+        self.writer.write("<td")
         self._WriteAttributes(self.elementAttributes)
-        self.writer.write('>')
-        
+        self.writer.write(">")
+
     def WriteElementEnd(self):
-        self.writer.write('</td>')
-    
+        self.writer.write("</td>")
+
     def WriteElementData(self, data):
         self.writer.write(data)
 
-    
+
 # HtmlTableInlineWriter
 #   This class is an extension to the HtmlTableWriter and uses an instance of it to generate an HTML
 #   table through a simplified interface. The public interface consists of 2 functions:
 #     - WriteData(self, data, column, row)
 #   and
 #     - End(self)
-#   
+#
 #  It is intended that this class is used when you have too much data to store and want to dump it
 #  to file as it is processed. The data is expected to be sparse (meaning that rows or columns might
 #  need to be skipped) and this class deals with writting "filler" elements to get you to the
 #  correct cell that you want to write. One restriction of this implementation (and HTML in general)
 #  is that you must write the cells out in a particular order.
-#  
+#
 #  Given the following example table:
 #    [ A, b, 6 ]
 #    [ 7, X, y ]
-#  
+#
 #  You would need to call WriteData and give it the data items (and row and column heading/index) in
 #  the following order:
 #    A, b, 6, 7, X, y
-#  
+#
 #  This is because of the way HTML tables are written and you must write out rows and columns in order.
 #  However, you may skip any number of items in the list so long as the order is maintained and you
 #  specify where to continue writing.
 class HtmlTableInlineWriter(object):
     def __init__(self, htmlTableWriterObject):
         if not isinstance(htmlTableWriterObject, HtmlTableWriter):
-            config.messagePrinter.dbg( "Warning: {0} is not an instance of HtmlTableWriter, subclassing is recommended!".format(htmlTableWriterObject) )
-        
+            config.messagePrinter.dbg(
+                "Warning: {0} is not an instance of HtmlTableWriter, subclassing is recommended!".format(
+                    htmlTableWriterObject
+                )
+            )
+
         self.writer = htmlTableWriterObject
-        
+
         # State information
         self.hasOpenTable = False
-    
+
     def _GetHeadingIndex(self, heading, headingList):
         if isinstance(heading, basestring):
             if heading in headingList:
@@ -134,20 +138,20 @@ class HtmlTableInlineWriter(object):
         elif isinstance(heading, int):
             if heading < len(headingList):
                 return heading
-        
+
         return None
 
     def _GetLinearIndex(self, rowIndex, columnIndex):
         return rowIndex * self.writer.GetColumnCount() + columnIndex
-    
-    def _WriteFillerElements(self, newLinearIndex, areAllElementsFillers = False):
+
+    def _WriteFillerElements(self, newLinearIndex, areAllElementsFillers=False):
         currentLinearIndex = self._GetLinearIndex(self.writer.GetRowIndex(), self.writer.GetColumnIndex())
-        
+
         for i in xrange(currentLinearIndex, newLinearIndex):
             self.writer.WriteElementEnd()
-            
+
             # Write row boundary
-            if ( (i + 1) % self.writer.GetColumnCount() ) == 0:
+            if ((i + 1) % self.writer.GetColumnCount()) == 0:
                 self.writer.WriteRowEnd()
                 self.writer.SetRowIndex(self.writer.GetRowIndex() + 1)
                 self.writer.SetColumnIndex(0)
@@ -155,40 +159,40 @@ class HtmlTableInlineWriter(object):
             else:
                 self.writer.SetColumnIndex(self.writer.GetColumnIndex() + 1)
 
-            self.writer.SetFillerElement( areAllElementsFillers or (i < (newLinearIndex - 1)) )
+            self.writer.SetFillerElement(areAllElementsFillers or (i < (newLinearIndex - 1)))
             self.writer.WriteElementStart()
-    
+
     def WriteData(self, data, columnIndex, rowIndex):
         # Sanitize inputs
         if (not isinstance(columnIndex, int)) or (not isinstance(rowIndex, int)):
             raise Exception("WriteData: column and row must be integers")
         if columnIndex > self.writer.GetColumnCount():
             raise Exception("Column (" + column + ") out of range")
-        
+
         # Start the table
         if not self.hasOpenTable:
             # Write the table preamble
             self.writer.WriteTableStart()
             self.hasOpenTable = True
-            
+
             # Write the row preamble
             self.writer.SetRowIndex(0)
             self.writer.WriteRowStart()
-            
+
             # Write the element preamble
             self.writer.SetColumnIndex(0)
             self.writer.WriteElementStart()
-        
+
         # From this point on, we ALWAYS have an open data element and row boundaries are written when
         # the "linear index" of our 2D matrix reaches a value that returns a remainder of zero when
         # divided by the number of columns.
-        
+
         currentIndex = self._GetLinearIndex(self.writer.GetRowIndex(), self.writer.GetColumnIndex())
         newIndex = self._GetLinearIndex(rowIndex, columnIndex)
-        
+
         if newIndex >= currentIndex:
             self._WriteFillerElements(newIndex, False)
-        
+
             self.writer.WriteElementData(data)
         else:
             # Data must be written in an EXACT order.
@@ -201,85 +205,87 @@ class HtmlTableInlineWriter(object):
             # Any other order will cause an error!
             # Items MAY be skipped.
             raise Exception("Incorrect order of rows/columns requested!")
-    
+
     def End(self):
         rowCount = self.writer.GetRowIndex()
         endIndex = rowCount * self.writer.GetColumnCount()
-        
+
         self._WriteFillerElements(endIndex - 1, True)
-        
+
         self.writer.WriteElementEnd()
         self.writer.WriteRowEnd()
         self.writer.WriteTableEnd()
 
+
 # IncludeTableWriter
 #   This class specifies the custom printing of the IncludeSubtables in the Dependency Matrix table.
 class IncludeHtmlTableWriter(HtmlTableWriter):
-    def __init__(self, writerObject, columnHeadings = []):
+    def __init__(self, writerObject, columnHeadings=[]):
         self.writer = writerObject
         self.rowIndex = 0
         self.columnIndex = 0
         self.columnHeadings = columnHeadings
-        
+
         self.isFillerElement = False
-        
+
     # Writer state getters/setters
     def IsFillerElement(self):
         return self.isFillerElement
-    
+
     def SetFillerElement(self, isFillerElement):
         self.isFillerElement = isFillerElement
-        
+
     def GetRowIndex(self):
         return self.rowIndex
-    
+
     def SetRowIndex(self, rowNumber):
         self.rowIndex = rowNumber
-    
+
     def GetColumnIndex(self):
         return self.columnIndex
-    
+
     def SetColumnIndex(self, columnNumber):
         self.columnIndex = columnNumber
-    
+
     def GetColumnCount(self):
         return len(self.columnHeadings)
-    
+
     # Writer core
     def WriteTableStart(self):
         self.writer.write('\n<table class="includes-table">\n')
-        
+
         if len(self.columnHeadings) > 0:
-            self.writer.write('<thead>\n')
-            self.writer.write('<tr>')
+            self.writer.write("<thead>\n")
+            self.writer.write("<tr>")
             for h in self.columnHeadings:
-                self.writer.write('<th>')
+                self.writer.write("<th>")
                 self.writer.write(h)
-                self.writer.write('</th>')
-            self.writer.write('</tr>\n')
-            self.writer.write('</thead>\n')
-    
-        self.writer.write('<tbody>\n')
-        
+                self.writer.write("</th>")
+            self.writer.write("</tr>\n")
+            self.writer.write("</thead>\n")
+
+        self.writer.write("<tbody>\n")
+
     def WriteTableEnd(self):
-        self.writer.write('</tbody>\n')
-        self.writer.write('</table>\n')
+        self.writer.write("</tbody>\n")
+        self.writer.write("</table>\n")
 
     def WriteRowStart(self):
-        self.writer.write('<tr>')
-    
+        self.writer.write("<tr>")
+
     def WriteRowEnd(self):
-        self.writer.write('</tr>\n')
-    
+        self.writer.write("</tr>\n")
+
     def WriteElementStart(self):
-        self.writer.write('<td>')
-    
+        self.writer.write("<td>")
+
     def WriteElementEnd(self):
-        self.writer.write('</td>')
-    
+        self.writer.write("</td>")
+
     def WriteElementData(self, data):
         self.writer.write(data)
-        
+
+
 # DependencyMatrixHtmlTableWriter
 #   Is a custom table writer that is used to generate the dependency matrix.
 class DependencyMatrixHtmlTableWriter(HtmlTableWriter):
@@ -287,158 +293,175 @@ class DependencyMatrixHtmlTableWriter(HtmlTableWriter):
         self.writer = writerObject
         self.rowHeadingList = []
         self.columnHeadingList = []
-        
+
         # State information
         self.rowIndex = 0
         self.elementIndex = 0
-        
+
         self.isFillerElement = False
-        
+
         self.solutionInfo = solutionInfo
-    
+
     def _SanitizeClassOrIdentifier(self, identifier):
         if identifier is None:
-            identifier = 'undefined'
+            identifier = "undefined"
         else:
             identifier = identifier.replace(" ", "-")
-        
+
         return identifier
-        
+
     def _GetColClass(self, projectName):
         projectName = self._SanitizeClassOrIdentifier(projectName)
-        return 'col-' + projectName
-    
+        return "col-" + projectName
+
     def _GetColId(self, projectName):
         projectName = self._SanitizeClassOrIdentifier(projectName)
-        return 'col-' + projectName + '-id'
-    
+        return "col-" + projectName + "-id"
+
     def _GetRowId(self, projectName):
         projectName = self._SanitizeClassOrIdentifier(projectName)
-        return 'row-' + projectName + '-id'
-    
+        return "row-" + projectName + "-id"
+
     # Writer state getters/setters
     def IsFillerElement(self):
         return self.isFillerElement
-    
+
     def SetFillerElement(self, isFillerElement):
         self.isFillerElement = isFillerElement
-        
+
     def GetRowIndex(self):
         return self.rowIndex
-    
+
     def SetRowIndex(self, rowNumber):
         self.rowIndex = rowNumber
-    
+
     def GetColumnIndex(self):
         return self.columnIndex
-    
+
     def SetColumnIndex(self, columnNumber):
         self.columnIndex = columnNumber
-    
+
     def GetColumnCount(self):
         return len(self.columnHeadingList)
-    
+
     def WriteTableStart(self):
         # Start writing the Dependency Matrix as a table. This part is highly dependent on the order
         # in which the data in the queries is returned so ensure that the ORDER BY statements are
         # correct.
         self.writer.write('<table id="dependency-matrix">\n')
-        self.writer.write('<caption>Project Dependency Matrix</caption>\n')
-        
+        self.writer.write("<caption>Project Dependency Matrix</caption>\n")
+
         # Write the column group for easier column operations.
-        self.writer.write('<colgroup>\n')
+        self.writer.write("<colgroup>\n")
         self.writer.write('    <col id="row-header-col">\n')
         for p in self.columnHeadingList:
             self.writer.write('    <col id="' + self._GetColId(p) + '">\n')
-        self.writer.write('</colgroup>\n')
-        
+        self.writer.write("</colgroup>\n")
+
         # Write the table header row
-        self.writer.write('<thead>\n')
-        self.writer.write('<tr>\n')
+        self.writer.write("<thead>\n")
+        self.writer.write("<tr>\n")
         # Write a blank header for the Projects column
         self.writer.write('    <th class="corner"></th>\n')
 
         for p in self.columnHeadingList:
-            self.writer.write('    <th class="rotate" scope="col"><div><span onclick="javascript:highlightCol(\'' + self._GetColId(p) + '\', \'' + self._GetColClass(p) + '\')" onmouseover="javascript:ComputeColumnTotals(\'' + self._GetColClass(p) + '\')" onmouseout="javascript:HideSumTable()">')
+            self.writer.write(
+                '    <th class="rotate" scope="col"><div><span onclick="javascript:highlightCol(\''
+                + self._GetColId(p)
+                + "', '"
+                + self._GetColClass(p)
+                + "')\" onmouseover=\"javascript:ComputeColumnTotals('"
+                + self._GetColClass(p)
+                + '\')" onmouseout="javascript:HideSumTable()">'
+            )
             self.writer.write(p)
-            self.writer.write('</span></div></th>\n')
-            
-        self.writer.write('</tr>\n')
-        self.writer.write('</thead>\n')
-        self.writer.write('<tbody>\n')
-        
+            self.writer.write("</span></div></th>\n")
+
+        self.writer.write("</tr>\n")
+        self.writer.write("</thead>\n")
+        self.writer.write("<tbody>\n")
+
     # _WriteTableEnd (private)
     #   This function is called to terminate a table that was "started" using the _WriteTableStart
     #   function.
     def WriteTableEnd(self):
-        self.writer.write('</tbody>\n')
+        self.writer.write("</tbody>\n")
         # Ensure that all the table and document tags are closed.
-        self.writer.write('</table>\n')
-        
+        self.writer.write("</table>\n")
+
         self.hasOpenTable = False
-    
+
     # _WriteRowStart
     #   Writes the preamble of each HTML table row (including the heading).
     def WriteRowStart(self):
         rowHeading = self.rowHeadingList[self.rowIndex]
-        
+
         self.writer.write('<tr id="' + self._GetRowId(rowHeading) + '">\n')
-        self.writer.write('    <th scope="row" onclick="javascript:highlightRow(\'' + self._GetRowId(rowHeading) + '\')" onmouseover="javascript:ComputeRowTotals(\'' + self._GetRowId(rowHeading) + '\')" onmouseout="javascript:HideSumTable()">')
+        self.writer.write(
+            '    <th scope="row" onclick="javascript:highlightRow(\''
+            + self._GetRowId(rowHeading)
+            + "')\" onmouseover=\"javascript:ComputeRowTotals('"
+            + self._GetRowId(rowHeading)
+            + '\')" onmouseout="javascript:HideSumTable()">'
+        )
         self.writer.write(rowHeading)
-        self.writer.write('</th>\n')
-    
+        self.writer.write("</th>\n")
+
     def WriteRowEnd(self):
-        self.writer.write('</tr>\n')
-    
+        self.writer.write("</tr>\n")
+
     def WriteElementStart(self):
         rowHeading = self.rowHeadingList[self.rowIndex]
         colHeading = self.columnHeadingList[self.columnIndex]
-        
+
         self.writer.write('    <td class="')
-        
+
         classStr = self._GetColClass(colHeading)
         # Write the table data item prefix
         if self.rowIndex == self.columnIndex:
-            classStr = " ".join([ classStr, "self" ])
+            classStr = " ".join([classStr, "self"])
         elif self.rowIndex > self.columnIndex:
             if self.isFillerElement:
-                classStr = " ".join([ classStr, "independent" ])
+                classStr = " ".join([classStr, "independent"])
             else:
-                classStr = " ".join([ classStr, "error" ])
+                classStr = " ".join([classStr, "error"])
         elif not self.solutionInfo.HasProjectDependency(rowHeading, colHeading):
             if self.isFillerElement:
-                classStr = " ".join([ classStr, "independent" ])
+                classStr = " ".join([classStr, "independent"])
             else:
-                classStr = " ".join([ classStr, "warning" ])
-            
+                classStr = " ".join([classStr, "warning"])
+
         self.writer.write(classStr)
-        
+
         self.writer.write('">')
-    
+
     def WriteElementEnd(self):
-        self.writer.write('</td>\n')
-        
+        self.writer.write("</td>\n")
+
     # SetRowAndColumnHeadings
     #   This function sets the internal list of headings. The list defines both the column headings
     #   and the row headings (this is an invariant of the Matrix and its generation depends on it).
     def SetRowHeadings(self, headingList):
         self.rowHeadingList = headingList
-    
+
     def SetColumnHeadings(self, headingList):
         self.columnHeadingList = headingList
-        
+
+
 # DatabaseProcessor class
 #   This class reads takes a database generated by the SolutionProcessor and uses it to generate
 #   a Dependency Matrix HTML page.
 class DatabaseProcessor(object):
-    def __init__(self, config = None, database = None, title = "Dependency Matrix", description = "Dependency Matrix HTML output"):
+    def __init__(
+        self, config=None, database=None, title="Dependency Matrix", description="Dependency Matrix HTML output"
+    ):
         self.htmlFilename = config.parser.get("Output", "HtmlFilename")
         self.database = database
         self.title = title
         self.description = description
         self.solutionInfo = dependencydatabase.SolutionInfo(config)
         self.config = config
-        
+
         # Initialise the HTML/CSS and JavaScript code that is not dependent on the query results.
         self.htmlDTD = "<!DOCTYPE html>"
         self.htmlStyle = r"""<style type="text/css">
@@ -1249,9 +1272,12 @@ function clearDiff() {
 
         self.htmlJsonData = self.solutionInfo.GetJsonProjectGroupsString()
         if self.htmlJsonData:
-            self.htmlDynamicJavaScript = """<script type="text/javascript">
+            self.htmlDynamicJavaScript = (
+                """<script type="text/javascript">
 function initJsonData() {
-    var jsonData = '""" + self.htmlJsonData.replace("\r","").replace("\n","").replace(" ","") + """'
+    var jsonData = '"""
+                + self.htmlJsonData.replace("\r", "").replace("\n", "").replace(" ", "")
+                + """'
     window.projectGroups = JSON.parse(jsonData);
     if (window.projectGroups.object)
     {
@@ -1299,85 +1325,86 @@ function initStart() {
     applyProjectGroupsCSS();
 }
 </script>"""
-            self.htmlOnloadFunction = "initStart()";
-    
+            )
+            self.htmlOnloadFunction = "initStart()"
+
     def _SanitizeClassOrIdentifier(self, identifier):
         if identifier is None:
-            identifier = 'undefined'
+            identifier = "undefined"
         else:
             identifier = identifier.replace(" ", "-")
-        
+
         return identifier
-        
+
     def _GetJsonDataId(self, project1, project2):
         rv = self._SanitizeClassOrIdentifier(project1)
-        rv += '-'
+        rv += "-"
         rv += self._SanitizeClassOrIdentifier(project2)
-        rv += '-json'
+        rv += "-json"
         return rv
-    
+
     def _GetInfoId(self, project1, project2):
         rv = self._SanitizeClassOrIdentifier(project1)
-        rv += '-'
+        rv += "-"
         rv += self._SanitizeClassOrIdentifier(project2)
-        rv += '-info'
+        rv += "-info"
         return rv
-    
+
     def SetTitle(self, title):
         self.title = title
-        
+
     def SetDescription(self, description):
         self.description = description
-    
+
     # GenerateHtmlOutput
     #   This function generates an HTML file containing a nice grid representation of our dependency
     #   matrix.
-    def GenerateHtml(self, outFilename = None):
+    def GenerateHtml(self, outFilename=None):
         if not outFilename:
             outFilename = self.htmlFilename
-        
+
         # Open the database for querying the information we require.
         if not self.database:
             return -1
         elif not self.database.isOpen:
             self.isDbOpen = self.database.Open()
-        
+
         if not self.database.isOpen:
             self.config.messagePrinter.error("Failed to open database. Exiting!")
             return -2
-        
+
         self.config.messagePrinter.info("HTML file: {0} writing...".format(outFilename))
-        
+
         # Ensure that the directory exists
         if outFilename:
             htmlPath, htmlFilename = os.path.split(outFilename)
             if htmlPath and not os.path.exists(htmlPath):
                 self.config.messagePrinter.info("Making directory: {0}".format(htmlPath))
                 os.mkdir(htmlPath)
-        
+
         # Write the HTML document header info.
         file = open(outFilename, "w")
         file.write(self.htmlDTD + "\n")
-        file.write('<html>\n')
-        file.write('<head>\n')
+        file.write("<html>\n")
+        file.write("<head>\n")
         file.write('<meta charset="utf-8">\n')
-        
+
         if self.title:
-            file.write('<title>' + self.title + '</title>\n')
-        
+            file.write("<title>" + self.title + "</title>\n")
+
         if self.description:
             file.write('<meta name="Description" content="')
             file.write(self.description)
             file.write('">\n')
-            
+
         if self.htmlJQuery:
             file.write("<!-- JQuery Library -->\n")
             file.write(self.htmlJQuery + "\n")
-        
+
         if self.htmlStyle:
             file.write("<!-- Static CSS definitions -->\n")
             file.write(self.htmlStyle + "\n")
-        
+
         if self.htmlJavaScript:
             file.write("<!-- Static JavaScript code -->\n")
             file.write(self.htmlJavaScript + "\n")
@@ -1385,35 +1412,36 @@ function initStart() {
         if self.htmlDynamicJavaScript:
             file.write("<!-- Dynamic JavaScript JSON configuration -->\n")
             file.write(self.htmlDynamicJavaScript)
-            
-        file.write('</head>\n')
-        file.write('<body')
+
+        file.write("</head>\n")
+        file.write("<body")
         if self.htmlOnloadFunction:
             file.write(' onload="javascript:' + self.htmlOnloadFunction + '"')
-        file.write('>\n')
-        
+        file.write(">\n")
+
         # The following part sets up the table headers (top row). All the computed counts that
         # follow will have to be in exactly the same order.
         projectOrderList = []
-        
+
         self.database.cur.execute("SELECT * FROM Project p ORDER BY p.HierarchyLevel ASC, p.Name DESC")
-        
+
         row = self.database.cur.fetchone()
         while row:
             projectOrderList.append(row[1])
             row = self.database.cur.fetchone()
-        
+
         matrixWriter = DependencyMatrixHtmlTableWriter(file, self.solutionInfo)
         matrixWriter.SetRowHeadings(projectOrderList)
         matrixWriter.SetColumnHeadings(projectOrderList)
         matrixTableWriter = HtmlTableInlineWriter(matrixWriter)
-        
+
         self.config.messagePrinter.info("The following query might take a while (~2min)...")
-        
-        queryStart = time.clock()
+
+        queryStart = time.monotonic()
         # Compute the number of times each item show up in the given header. Must follow the same
         # order as the previously outputed headers.
-        self.database.cur.execute("""
+        self.database.cur.execute(
+            """
         SELECT p.Name AS ProjectName,
                f.SolutionPath AS FilePath,
                f.Filename AS Filename,
@@ -1427,8 +1455,9 @@ function initStart() {
         INNER JOIN IncludeDirective i ON i.CodeFileSolutionPath = f.SolutionPath
         INNER JOIN Project ip ON i.IncludeProject = ip.Name
         ORDER BY p.HierarchyLevel ASC, p.Name DESC, ip.HierarchyLevel ASC, ip.Name DESC, f.SolutionPath ASC;
-        """)
-        
+        """
+        )
+
         self.config.messagePrinter.info("Query completed. Processing result set...")
         # Setup the constant indices of the result set columns. They follow the order given in the
         # SELECT statement above.
@@ -1440,20 +1469,28 @@ function initStart() {
         includeFilename = 5
         lineNumber = 6
         includeProject = 7
-        
+
         # Iteration state variables
         currentProject = projectOrderList[0]
         currentIncludeProject = projectOrderList[0]
         currentIncludeCount = 0
-        
+
         # Write the table data item prefix
         jsonDataId = self._GetJsonDataId(currentProject, currentIncludeProject)
-        matrixTableWriter.WriteData('\n<div onclick="javascript:showHide(\'' + jsonDataId + '\', \'show\')">\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        matrixTableWriter.WriteData('<div id="' + jsonDataId + '" class="jsondata hidden">\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        
+        matrixTableWriter.WriteData(
+            "\n<div onclick=\"javascript:showHide('" + jsonDataId + "', 'show')\">\n",
+            projectOrderList.index(currentIncludeProject),
+            projectOrderList.index(currentProject),
+        )
+        matrixTableWriter.WriteData(
+            '<div id="' + jsonDataId + '" class="jsondata hidden">\n',
+            projectOrderList.index(currentIncludeProject),
+            projectOrderList.index(currentProject),
+        )
+
         # Initialise the JSON element. writer.
         fileObjectList = OrderedDict()
-        
+
         totalDependencies = 0
         totalInternalLinkage = 0
         totalHierarchyViolations = 0
@@ -1463,70 +1500,100 @@ function initStart() {
         while row:
             if currentProject != row[projectName] or currentIncludeProject != row[includeProject]:
                 # Finalise the JSON element.
-                fileObjectList2 = [OrderedDict([('file', x), ('include-list', fileObjectList[x])]) for x in fileObjectList];
-                file.write(json.dumps(fileObjectList2) + '\n');
-                
+                fileObjectList2 = [
+                    OrderedDict([("file", x), ("include-list", fileObjectList[x])]) for x in fileObjectList
+                ]
+                file.write(json.dumps(fileObjectList2) + "\n")
+
                 # Write the table data item suffix
-                matrixTableWriter.WriteData('</div>\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
+                matrixTableWriter.WriteData(
+                    "</div>\n", projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+                )
                 dataString = "<!-- row:[" + currentProject + "] column:[" + currentIncludeProject + "] -->\n"
                 dataString += '<span class="include-count">'
                 dataString += str(currentIncludeCount)
-                dataString += '</span>\n'
-                matrixTableWriter.WriteData(dataString, projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-                matrixTableWriter.WriteData('</div>\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-                
+                dataString += "</span>\n"
+                matrixTableWriter.WriteData(
+                    dataString, projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+                )
+                matrixTableWriter.WriteData(
+                    "</div>\n", projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+                )
+
                 # Add this to the appropriate total
                 if matrixWriter.GetRowIndex() == matrixWriter.GetColumnIndex():
                     totalInternalLinkage += currentIncludeCount
                 elif matrixWriter.GetRowIndex() > matrixWriter.GetColumnIndex():
                     totalHierarchyViolations += currentIncludeCount
                     if self.config.printHierarchyViolations:
-                        self.config.messagePrinter.info("Project hierarchy violation:  {project} includes {count} items from {include}".format(project=currentProject, count=currentIncludeCount, include=currentIncludeProject))
+                        self.config.messagePrinter.info(
+                            "Project hierarchy violation:  {project} includes {count} items from {include}".format(
+                                project=currentProject, count=currentIncludeCount, include=currentIncludeProject
+                            )
+                        )
                 elif not self.solutionInfo.HasProjectDependency(currentProject, currentIncludeProject):
                     totalPotentialViolations += currentIncludeCount
                     if self.config.printDependencyViolations:
-                        self.config.messagePrinter.info("Project dependency violation: {project} includes {count} items from {include}".format(project=currentProject, count=currentIncludeCount, include=currentIncludeProject))
+                        self.config.messagePrinter.info(
+                            "Project dependency violation: {project} includes {count} items from {include}".format(
+                                project=currentProject, count=currentIncludeCount, include=currentIncludeProject
+                            )
+                        )
                 else:
                     totalDependencies += currentIncludeCount
-                
+
                 # Change to the next project group (row,column)
                 currentProject = row[projectName]
                 currentIncludeProject = row[includeProject]
                 currentIncludeCount = 0
-                
+
                 jsonDataId = self._GetJsonDataId(currentProject, currentIncludeProject)
-                matrixTableWriter.WriteData('\n<div onclick="javascript:showHide(\'' + jsonDataId + '\', \'show\')">\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-                matrixTableWriter.WriteData('<div id="' + jsonDataId + '" class="jsondata hidden">\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        
+                matrixTableWriter.WriteData(
+                    "\n<div onclick=\"javascript:showHide('" + jsonDataId + "', 'show')\">\n",
+                    projectOrderList.index(currentIncludeProject),
+                    projectOrderList.index(currentProject),
+                )
+                matrixTableWriter.WriteData(
+                    '<div id="' + jsonDataId + '" class="jsondata hidden">\n',
+                    projectOrderList.index(currentIncludeProject),
+                    projectOrderList.index(currentProject),
+                )
+
                 # Initialise a new JSON element. writer.
                 fileObjectList = OrderedDict()
-            
+
             # Write a row to the JSON element.
             if row[filePath] not in fileObjectList:
-                fileObjectList[row[filePath]] = OrderedDict();
+                fileObjectList[row[filePath]] = OrderedDict()
             if row[includeText] not in fileObjectList[row[filePath]]:
-                fileObjectList[row[filePath]][row[includeText]] = [];
-            fileObjectList[row[filePath]][row[includeText]].append(OrderedDict());
-            fileObjectList[row[filePath]][row[includeText]][-1]["line-number"]  = row[lineNumber];
-            fileObjectList[row[filePath]][row[includeText]][-1]["include-type"] = row[includeType];
-            
+                fileObjectList[row[filePath]][row[includeText]] = []
+            fileObjectList[row[filePath]][row[includeText]].append(OrderedDict())
+            fileObjectList[row[filePath]][row[includeText]][-1]["line-number"] = row[lineNumber]
+            fileObjectList[row[filePath]][row[includeText]][-1]["include-type"] = row[includeType]
+
             # Increment step
             currentIncludeCount += 1
             row = self.database.cur.fetchone()
-        
+
         # Finalise the JSON element.
-        fileObjectList2 = [OrderedDict([('file', x), ('include-list', fileObjectList[x])]) for x in fileObjectList];
-        file.write(json.dumps(fileObjectList2));
-        
+        fileObjectList2 = [OrderedDict([("file", x), ("include-list", fileObjectList[x])]) for x in fileObjectList]
+        file.write(json.dumps(fileObjectList2))
+
         # Write the table data item suffix
-        matrixTableWriter.WriteData('</div>\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
+        matrixTableWriter.WriteData(
+            "</div>\n", projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+        )
         dataString = "<!-- row:[" + currentProject + "] column:[" + currentIncludeProject + "] -->\n"
         dataString += '<span class="include-count">'
         dataString += str(currentIncludeCount)
-        dataString += '</span>\n'
-        matrixTableWriter.WriteData(dataString, projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        matrixTableWriter.WriteData('</div>\n', projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        
+        dataString += "</span>\n"
+        matrixTableWriter.WriteData(
+            dataString, projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+        )
+        matrixTableWriter.WriteData(
+            "</div>\n", projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject)
+        )
+
         # Ensure that ALL the rows are written!
         if currentProject != projectOrderList[-1]:
             # We will enter here if we haven't reached the last row. We will write a fake data item
@@ -1534,19 +1601,26 @@ function initStart() {
             # upto and including the last row when we End() it.
             currentProject = projectOrderList[-1]
             currentIncludeProject = projectOrderList[-1]
-            matrixTableWriter.WriteData("\n<!-- r:[" + currentProject + "] c:[" + currentIncludeProject + "] -->\n", projectOrderList.index(currentIncludeProject), projectOrderList.index(currentProject))
-        
+            matrixTableWriter.WriteData(
+                "\n<!-- r:[" + currentProject + "] c:[" + currentIncludeProject + "] -->\n",
+                projectOrderList.index(currentIncludeProject),
+                projectOrderList.index(currentProject),
+            )
+
         # Finalise the matrix table
         matrixTableWriter.End()
-        
+
         # Write the footer (includes summary tables, filter and diff inputs)
-        file.write("""
+        file.write(
+            """
 <table class="layout-table">
     <tbody>
         <tr>
             <td>            
                 <div class="total-violations">
-                    <span>Total issues: <span>""" + str(totalHierarchyViolations + totalPotentialViolations) + """</span></span>
+                    <span>Total issues: <span>"""
+            + str(totalHierarchyViolations + totalPotentialViolations)
+            + """</span></span>
                 </div>
                 <div class="legend">
                     <table id="dependency-matrix-legend">
@@ -1557,11 +1631,19 @@ function initStart() {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td><span class="include-count">Dependent projects</span></td><td><span class="include-count">""" + str(totalDependencies) + """</span></td></tr>
+                            <tr><td><span class="include-count">Dependent projects</span></td><td><span class="include-count">"""
+            + str(totalDependencies)
+            + """</span></td></tr>
                             <tr><td class="independent"><span class="include-count">Independent projects</span></td><td class="independent"><span class="include-count">--</span></td></tr>
-                            <tr><td class="warning"><span class="include-count">Independent projects include each other</span></td><td class="warning"><span class="include-count">""" + str(totalPotentialViolations) + """</span></td></tr>
-                            <tr><td class="error"><span class="include-count">Circular dependency</span></td><td class="error"><span class="include-count">""" + str(totalHierarchyViolations) + """</span></td></tr>
-                            <tr><td class="self"><span class="include-count">The projects internal #include count</span></td><td class="self"><span class="include-count">""" + str(totalInternalLinkage) + """</span></td></tr>
+                            <tr><td class="warning"><span class="include-count">Independent projects include each other</span></td><td class="warning"><span class="include-count">"""
+            + str(totalPotentialViolations)
+            + """</span></td></tr>
+                            <tr><td class="error"><span class="include-count">Circular dependency</span></td><td class="error"><span class="include-count">"""
+            + str(totalHierarchyViolations)
+            + """</span></td></tr>
+                            <tr><td class="self"><span class="include-count">The projects internal #include count</span></td><td class="self"><span class="include-count">"""
+            + str(totalInternalLinkage)
+            + """</span></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1604,16 +1686,17 @@ function initStart() {
 </table>
 <div id="diff-anchor">
 </div>
-""")
-        
+"""
+        )
+
         # Close the document
-        file.write('</body>\n')
-        file.write('</html>\n')
-        
+        file.write("</body>\n")
+        file.write("</html>\n")
+
         # Clean up and print happy message!
         self.database.Close()
         file.close()
-        
+
         self.config.messagePrinter.info("Html file: {0} written.".format(outFilename))
 
         if self.config.printTotalViolations:
@@ -1624,35 +1707,71 @@ function initStart() {
             self.config.messagePrinter.info("  Total dependencies:            {0}".format(totalDependencies))
 
         return totalHierarchyViolations
-        
+
+
 # ################################################################################################ #
 # Script Main                                                                                      #
 # ################################################################################################ #
 def Main(argv):
     # Try and initialise the configuration file
-    argparser = argparse.ArgumentParser(description='Generates an HTML matrix containing all of the #include dependencies in your project.')
+    argparser = argparse.ArgumentParser(
+        description="Generates an HTML matrix containing all of the #include dependencies in your project."
+    )
     config = dependencydatabase.DependencyScriptConfiguration(argparser=argparser)
-    
-    config.argparser.add_argument('-r', '--reuse-database', dest='reuseDatabase', action='store_true', default=False, help='Specifies that an existing database is to be used instead of generating one on this run.')
-    config.argparser.add_argument('--dont-open', dest='openInBrowser', action='store_false', default=True, help='Prevents the script from automatically opening the resulting HTML file in the default web browser.')
-    config.argparser.add_argument('--print-dependency-violations', dest='printDependencyViolations', action='store_true', default=False, help='Print dependency violations as they are discovered in the terminal.')
-    config.argparser.add_argument('--print-hierarchy-violations', dest='printHierarchyViolations', action='store_true', default=False, help='Print hierarchy violations as they are discovered in the terminal.')
-    config.argparser.add_argument('--print-totals', dest='printTotalViolations', action='store_true', default=False, help='Print totals for hierarchy and dependency violations once the HTML has been generated.')
-    
+
+    config.argparser.add_argument(
+        "-r",
+        "--reuse-database",
+        dest="reuseDatabase",
+        action="store_true",
+        default=False,
+        help="Specifies that an existing database is to be used instead of generating one on this run.",
+    )
+    config.argparser.add_argument(
+        "--dont-open",
+        dest="openInBrowser",
+        action="store_false",
+        default=True,
+        help="Prevents the script from automatically opening the resulting HTML file in the default web browser.",
+    )
+    config.argparser.add_argument(
+        "--print-dependency-violations",
+        dest="printDependencyViolations",
+        action="store_true",
+        default=False,
+        help="Print dependency violations as they are discovered in the terminal.",
+    )
+    config.argparser.add_argument(
+        "--print-hierarchy-violations",
+        dest="printHierarchyViolations",
+        action="store_true",
+        default=False,
+        help="Print hierarchy violations as they are discovered in the terminal.",
+    )
+    config.argparser.add_argument(
+        "--print-totals",
+        dest="printTotalViolations",
+        action="store_true",
+        default=False,
+        help="Print totals for hierarchy and dependency violations once the HTML has been generated.",
+    )
+
     config.Configure(argv)
-    
+
     # Force info messages to be printed.
     config.messagePrinter.isInfoEnabled = True
-    
+
     if config.printExampleConfig:
         dependencydatabase.PrintExampleConfig()
     else:
         # Time the execution of our script.
-        config.messagePrinter.referenceTime = time.clock()
-        
+        config.messagePrinter.referenceTime = time.monotonic()
+
         slnProcessor = None
         if config.reuseDatabase and os.path.exists(config.databaseFilename):
-            database = dependencydatabase.DependencyScriptDatabase(config.databaseFilename, messagePrinter=config.messagePrinter)
+            database = dependencydatabase.DependencyScriptDatabase(
+                config.databaseFilename, messagePrinter=config.messagePrinter
+            )
         else:
             fileFilter = dependencydatabase.FileFilter(config)
             slnProcessor = dependencydatabase.SolutionProcessor(config, fileFilter)
@@ -1660,24 +1779,28 @@ def Main(argv):
                 slnProcessor.database.close()
                 return False
             database = slnProcessor.database
-        
+
         dbProcessor = DatabaseProcessor(config, database)
         result = dbProcessor.GenerateHtml()
-        
+
         if slnProcessor is not None:
             slnProcessor.Close()
-        
+
         if result >= 0:
             config.messagePrinter.info("Finished.")
             if config.openInBrowser:
                 import webbrowser
-                webbrowser.open(os.path.abspath(dbProcessor.htmlFilename), new=2, autoraise=True) # new=2 opens in a new tab, autoraise restores the window if minimized.
-                
+
+                webbrowser.open(
+                    os.path.abspath(dbProcessor.htmlFilename), new=2, autoraise=True
+                )  # new=2 opens in a new tab, autoraise restores the window if minimized.
+
             return result
         else:
             config.messagePrinter.info("Aborted.")
             return -1
-    
+
+
 # ################################################################################################ #
 # Script Start                                                                                     #
 # ################################################################################################ #
@@ -1689,4 +1812,3 @@ if __name__ == "__main__":
     elif rv < 0:
         # Internal error
         sys.exit(2)
-
