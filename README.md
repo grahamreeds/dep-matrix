@@ -11,7 +11,7 @@ There are 4 scripts in this directory:
   * dependencylist.py
   * utility.py
 
-All scripts require python 2.7 to run correctly.
+All scripts have been updated to work with python 3.8.
 
 And their functionality is documented below.
 
