@@ -14,7 +14,11 @@ import os
 import posixpath
 import re
 import string
-import ConfigParser
+
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 import time
 import sqlite3
 from collections import OrderedDict
@@ -147,7 +151,7 @@ class HtmlTableInlineWriter(object):
     def _WriteFillerElements(self, newLinearIndex, areAllElementsFillers=False):
         currentLinearIndex = self._GetLinearIndex(self.writer.GetRowIndex(), self.writer.GetColumnIndex())
 
-        for i in xrange(currentLinearIndex, newLinearIndex):
+        for i in range(currentLinearIndex, newLinearIndex):
             self.writer.WriteElementEnd()
 
             # Write row boundary
