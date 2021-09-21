@@ -601,7 +601,7 @@ CREATE TABLE IF NOT EXISTS IncludeDirective (
         self, solutionPath, includeText, includeType, includeFilename, includeProject, includeSolutionPath, lineNumber
     ):
         solutionPath = toPosixPath(solutionPath)  # normpath doesn't normalize to posix slashes.
-        normIncludeText = toPosixPath(includeText)  # normpath doesn't normalize to posix slashes.
+        normIncludeText = toPosixPath(includeText.decode("ascii"))  # normpath doesn't normalize to posix slashes.
         if includeSolutionPath:
             includeSolutionPath = toPosixPath(includeSolutionPath)  # normpath doesn't normalize to posix slashes
 
@@ -732,7 +732,7 @@ class SolutionProcessor(object):
     # match.group(1) will contain the #include content including {<,>,"}
     # match.group(2) will contain the included filepath only for system includes (None otherwise)
     # match.group(3) will contain the included filepath only for local includes (None otherwise)
-    includeRegex = re.compile('^[ ]*#include[ ]+(\\<(.*?)\\>|"(.*?)")')
+    includeRegex = re.compile(b'^[ ]*#include[ ]+(\\<(.*?)\\>|"(.*?)")')
 
     def __init__(self, config=None, fileFilter=None):
         self.config = config
@@ -750,7 +750,7 @@ class SolutionProcessor(object):
         systemIncludes = []
 
         try:
-            reader = open(filepath)
+            reader = open(filepath, "rb")
         except IOError as e:
             self.config.messagePrinter.error("Error, couldn't open" + repr(filepath))
             sys.exit(1)
@@ -814,7 +814,7 @@ class SolutionProcessor(object):
 
     def AddIncludeTupleToDatabase(self, filepath, solPath, includeTuple, isLocalInclude=True):
         include, lineNumber = includeTuple
-        absoluteIncludePath = self.GetIncludeFileAbsolutePath(filepath, include, isLocalInclude)
+        absoluteIncludePath = self.GetIncludeFileAbsolutePath(filepath, include.decode("ascii"), isLocalInclude)
 
         if not solPath:
             solPath = self.solutionInfo.GetPathRelativeToSolution(filepath)
@@ -826,7 +826,7 @@ class SolutionProcessor(object):
             solIncPath = None
             incProject = None
 
-        includePath, includeFilename = os.path.split(include)
+        includePath, includeFilename = os.path.split(include.decode("ascii"))
 
         includeType = self.database.includeTypeSystem
         if isLocalInclude:
